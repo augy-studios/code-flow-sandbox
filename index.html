@@ -101,7 +101,10 @@
                 <button id="saveBtn" class="btn" type="button">Save</button>
                 <button id="loadBtn" class="btn" type="button">Load</button>
 
-                <button id="themeBtn" class="btn ghost" type="button" title="Toggle theme">Theme</button>
+                <button id="openTheme" class="btn ghost" type="button" aria-haspopup="dialog"
+                    aria-controls="themeDialog">
+                    Theme
+                </button>
             </div>
         </header>
 
@@ -228,6 +231,28 @@
                 <div id="modalFoot" class="modal-foot"></div>
             </div>
         </div>
+    </div>
+
+    <div id="overlay" class="overlay" role="presentation">
+        <section id="themeDialog" class="modal" role="dialog" aria-modal="true" aria-labelledby="themeTitle"
+            aria-describedby="themeDesc" tabindex="-1">
+            <header class="modal-header">
+                <div class="title">
+                    <h2 id="themeTitle">Choose a theme</h2>
+                    <p id="themeDesc">Changes the page background colour.</p>
+                </div>
+                <button id="closeTheme" class="icon-btn" type="button" aria-label="Close">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"
+                        aria-hidden="true">
+                        <path d="M4 4L12 12M12 4L4 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                    </svg>
+                </button>
+            </header>
+
+            <div class="modal-body">
+                <div id="themeGrid" class="grid" role="listbox" aria-label="Theme options"></div>
+            </div>
+        </section>
     </div>
 </body>
 

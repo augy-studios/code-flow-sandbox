@@ -107,6 +107,191 @@ import Foundation
 print("Hello from CodeFlow!")`,
 };
 
+// Theme picker (like your attached Not Green theme modal)
+const THEMES = [{
+        key: "classic",
+        hex: "#ccffcc",
+        label: "Classic"
+    },
+    {
+        key: "red",
+        hex: "#ffcccc",
+        label: "Not green 1"
+    },
+    {
+        key: "blue",
+        hex: "#ccccff",
+        label: "Not green 2"
+    },
+    {
+        key: "yellow",
+        hex: "#ffffcc",
+        label: "Not green 3"
+    },
+    {
+        key: "magenta",
+        hex: "#ffccff",
+        label: "Not green 4"
+    },
+    {
+        key: "cyan",
+        hex: "#ccffff",
+        label: "Not green 5"
+    },
+    {
+        key: "black",
+        hex: "#000000",
+        label: "Really really dark green"
+    },
+    {
+        key: "white",
+        hex: "#ffffff",
+        label: "Really really light green"
+    },
+    {
+        key: "rainbow",
+        gradient: "linear-gradient(135deg, #ffcccc 0%, #ccccff 33%, #ffffcc 66%, #ccffcc 100%)",
+        label: "Green with friends",
+    },
+];
+
+const themeEls = {
+    openBtn: document.getElementById("openTheme"),
+    closeBtn: document.getElementById("closeTheme"),
+    overlay: document.getElementById("overlay"),
+    dialog: document.getElementById("themeDialog"),
+    grid: document.getElementById("themeGrid"),
+};
+
+function isDark(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    return lum < 0.35;
+}
+
+function applyTheme(themeKey) {
+    const t = THEMES.find(x => x.key === themeKey) || THEMES[0];
+
+    if (t.gradient) {
+        document.documentElement.style.setProperty("--bg", t.gradient);
+        document.body.classList.remove("is-dark");
+    } else {
+        document.documentElement.style.setProperty("--bg", t.hex);
+        document.body.classList.toggle("is-dark", isDark(t.hex));
+    }
+
+    localStorage.setItem("themeKey", t.key);
+
+    if (themeEls.grid) {
+        [...themeEls.grid.querySelectorAll("[data-theme]")].forEach(btn => {
+            btn.setAttribute("aria-selected", String(btn.dataset.theme === t.key));
+        });
+    }
+}
+
+function buildThemeGrid() {
+    if (!themeEls.grid) return;
+    themeEls.grid.innerHTML = "";
+
+    for (const t of THEMES) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "theme";
+        btn.dataset.theme = t.key;
+        btn.setAttribute("role", "option");
+        btn.setAttribute("aria-selected", "false");
+
+        const left = document.createElement("div");
+        left.className = "left";
+
+        const swatch = document.createElement("div");
+        swatch.className = "swatch";
+        swatch.style.background = t.gradient ? t.gradient : t.hex;
+
+        const name = document.createElement("div");
+        name.className = "name";
+        name.textContent = t.label;
+
+        left.appendChild(swatch);
+        left.appendChild(name);
+        btn.appendChild(left);
+
+        btn.addEventListener("click", () => {
+            applyTheme(t.key);
+            closeThemeModal();
+            themeEls.openBtn?.focus();
+        });
+
+        themeEls.grid.appendChild(btn);
+    }
+}
+
+function openThemeModal() {
+    themeEls.overlay?.classList.add("open");
+    themeEls.dialog?.focus({
+        preventScroll: true
+    });
+}
+
+function closeThemeModal() {
+    themeEls.overlay?.classList.remove("open");
+}
+
+// Wire up handlers (call this inside initUI() after DOM is ready)
+function initThemePicker() {
+    if (!themeEls.openBtn || !themeEls.overlay || !themeEls.dialog) return;
+
+    buildThemeGrid();
+    applyTheme(localStorage.getItem("themeKey") || "classic");
+
+    themeEls.openBtn.addEventListener("click", openThemeModal);
+    themeEls.closeBtn?.addEventListener("click", () => {
+        closeThemeModal();
+        themeEls.openBtn?.focus();
+    });
+
+    // Close on overlay click (but not clicks inside modal)
+    themeEls.overlay.addEventListener("click", (e) => {
+        if (e.target === themeEls.overlay) {
+            closeThemeModal();
+            themeEls.openBtn?.focus();
+        }
+    });
+
+    // Escape closes; simple focus trap (same behaviour as your attached script)
+    document.addEventListener("keydown", (e) => {
+        if (!themeEls.overlay.classList.contains("open")) return;
+
+        if (e.key === "Escape") {
+            e.preventDefault();
+            closeThemeModal();
+            themeEls.openBtn?.focus();
+            return;
+        }
+
+        if (e.key === "Tab") {
+            const focusables = themeEls.overlay.querySelectorAll(
+                'button, [tabindex]:not([tabindex="-1"])'
+            );
+            const list = [...focusables].filter(el => !el.hasAttribute("disabled"));
+            if (!list.length) return;
+
+            const first = list[0];
+            const last = list[list.length - 1];
+
+            if (e.shiftKey && document.activeElement === first) {
+                e.preventDefault();
+                last.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+                e.preventDefault();
+                first.focus();
+            }
+        }
+    });
+}
+
 const els = {
     languageSelect: document.getElementById("languageSelect"),
     modeCodeBtn: document.getElementById("modeCodeBtn"),
@@ -116,7 +301,6 @@ const els = {
     runBtn: document.getElementById("runBtn"),
     output: document.getElementById("output"),
     sandboxFrame: document.getElementById("sandboxFrame"),
-    themeBtn: document.getElementById("themeBtn"),
 
     wrapToggle: document.getElementById("wrapToggle"),
 
@@ -194,13 +378,6 @@ function initUI() {
     els.modeFlowBtn.addEventListener("click", () => setMode("flow"));
 
     els.wrapToggle?.addEventListener("change", () => editor.setOption("lineWrapping", els.wrapToggle.checked));
-
-    els.themeBtn.addEventListener("click", () => {
-        currentTheme = currentTheme === "light"?"dark" : "light";
-        localStorage.setItem("cf_theme", currentTheme);
-        applyTheme(currentTheme);
-        editor.setOption("theme", currentTheme === "dark"?"material-darker" : "eclipse");
-    });
 
     els.runBtn.addEventListener("click", runViaJudge0);
 
@@ -286,6 +463,8 @@ function initUI() {
     els.modalBackdrop.addEventListener("click", (e) => {
         if (e.target === els.modalBackdrop) closeModal();
     });
+
+    initThemePicker();
 }
 
 function setMode(mode) {
