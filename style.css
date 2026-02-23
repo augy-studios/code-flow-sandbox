@@ -74,7 +74,13 @@ body {
   margin: 0;
   font-family: var(--sans);
   color: var(--text);
-  background: var(--bg);
+
+  /* FORCE bg to always come from --bg */
+  background: var(--bg) !important;
+  background-attachment: fixed !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center !important;
 }
 
 .app {
@@ -730,17 +736,16 @@ body {
   }
 }
 
-/* Keep background fixed like your attached theme switcher */
 html,
 body {
-  background: var(--bg);
+  background: var(--bg) !important;
   background-attachment: fixed;
   background-repeat: no-repeat;
   background-size: cover;
   background-position: center;
 }
 
-/* Theme Modal (matches attached behaviour/UX) */
+/* Theme Modal */
 .overlay {
   position: fixed;
   inset: 0;

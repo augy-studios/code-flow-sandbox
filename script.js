@@ -174,21 +174,26 @@ function isDark(hex) {
 function applyTheme(themeKey) {
     const t = THEMES.find(x => x.key === themeKey) || THEMES[0];
 
+    const bgValue = t.gradient ? t.gradient : t.hex;
+
+    // 1) set CSS variable
+    document.documentElement.style.setProperty('--bg', bgValue);
+
+    // 2) failsafe: directly set background too
+    document.documentElement.style.background = bgValue;
+    document.body.style.background = bgValue;
+
     if (t.gradient) {
-        document.documentElement.style.setProperty("--bg", t.gradient);
-        document.body.classList.remove("is-dark");
+        document.body.classList.remove('is-dark');
     } else {
-        document.documentElement.style.setProperty("--bg", t.hex);
-        document.body.classList.toggle("is-dark", isDark(t.hex));
+        document.body.classList.toggle('is-dark', isDark(t.hex));
     }
 
-    localStorage.setItem("themeKey", t.key);
+    localStorage.setItem('themeKey', t.key);
 
-    if (themeEls.grid) {
-        [...themeEls.grid.querySelectorAll("[data-theme]")].forEach(btn => {
-            btn.setAttribute("aria-selected", String(btn.dataset.theme === t.key));
-        });
-    }
+    [...grid.querySelectorAll('[data-theme]')].forEach(btn => {
+        btn.setAttribute('aria-selected', String(btn.dataset.theme === t.key));
+    });
 }
 
 function buildThemeGrid() {
