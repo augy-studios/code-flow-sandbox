@@ -19,7 +19,7 @@ export default async function handler(req, res) {
             data,
             error
         } = await supabase
-            .from("codeflow")
+            .from("projects")
             .select("id,title,language,updated_at")
             .order("updated_at", {
                 ascending: false

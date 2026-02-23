@@ -1,53 +1,53 @@
 const LANGUAGES = {
     javascript: {
         name: "JavaScript",
-        cmMode: "javascript",
-        ext: "js"
+        ext: "js",
+        judge0Hint: "JavaScript"
     },
     python: {
         name: "Python",
-        cmMode: "python",
-        ext: "py"
+        ext: "py",
+        judge0Hint: "Python"
     },
     java: {
         name: "Java",
-        cmMode: "text/x-java",
-        ext: "java"
+        ext: "java",
+        judge0Hint: "Java"
     },
     c: {
         name: "C",
-        cmMode: "text/x-csrc",
-        ext: "c"
+        ext: "c",
+        judge0Hint: "C "
     },
     cpp: {
         name: "C++",
-        cmMode: "text/x-c++src",
-        ext: "cpp"
+        ext: "cpp",
+        judge0Hint: "C++"
     },
     csharp: {
         name: "C#",
-        cmMode: "text/x-csharp",
-        ext: "cs"
+        ext: "cs",
+        judge0Hint: "C#"
     },
     php: {
         name: "PHP",
-        cmMode: "application/x-httpd-php",
-        ext: "php"
+        ext: "php",
+        judge0Hint: "PHP"
     },
     ruby: {
         name: "Ruby",
-        cmMode: "ruby",
-        ext: "rb"
+        ext: "rb",
+        judge0Hint: "Ruby"
     },
     go: {
         name: "Go",
-        cmMode: "go",
-        ext: "go"
+        ext: "go",
+        judge0Hint: "Go"
     },
     swift: {
         name: "Swift",
-        cmMode: "swift",
-        ext: "swift"
+        ext: "swift",
+        judge0Hint: "Swift"
     },
 };
 
@@ -107,7 +107,6 @@ import Foundation
 print("Hello from CodeFlow!")`,
 };
 
-// --- DOM
 const els = {
     languageSelect: document.getElementById("languageSelect"),
     modeCodeBtn: document.getElementById("modeCodeBtn"),
@@ -120,15 +119,13 @@ const els = {
     themeBtn: document.getElementById("themeBtn"),
 
     wrapToggle: document.getElementById("wrapToggle"),
-    lintHintToggle: document.getElementById("lintHintToggle"),
 
     newProjectBtn: document.getElementById("newProjectBtn"),
     copyBtn: document.getElementById("copyBtn"),
     downloadBtn: document.getElementById("downloadBtn"),
 
-    // Flow
-    flowList: document.getElementById("flowList"),
-    flowLinks: document.getElementById("flowLinks"),
+    // Nested Flow
+    flowTree: document.getElementById("flowTree"),
     generateBtn: document.getElementById("generateBtn"),
     clearFlowBtn: document.getElementById("clearFlowBtn"),
     exportFlowJsonBtn: document.getElementById("exportFlowJsonBtn"),
@@ -146,32 +143,36 @@ const els = {
     modalClose: document.getElementById("modalClose"),
 };
 
-// --- State
 let editor;
 let currentLanguage = "javascript";
 let currentTheme = localStorage.getItem("cf_theme") || "light";
 
-// Flow is a simple ordered list of blocks
-let flow = [];
-
-/** block schema examples:
- * { id, type:"start" }
- * { id, type:"output", text:"Hello" }
- * { id, type:"assign", varName:"x", value:"10" }
- * { id, type:"if", condition:"x > 5", thenText:"Big!" }
- * { id, type:"while", condition:"i < 3", bodyText:"Looping..." }
- * { id, type:"end" }
+/**
+ * Nested flow model:
+ * program = { type:"program", children: Node[] }
+ * Node types:
+ * - output: {type:"output", text}
+ * - assign: {type:"assign", varName, value}
+ * - if: {type:"if", condition, then: Node[], else: Node[]}
+ * - while: {type:"while", condition, body: Node[]}
  */
+let program = {
+    type: "program",
+    children: []
+};
+
+// Cached Judge0 languages list (from /api/languages)
+let judge0Languages = null;
+
 const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
 
-// --- Init
 window.addEventListener("DOMContentLoaded", () => {
     applyTheme(currentTheme);
     initEditor();
     initUI();
     setLanguage("javascript");
     resetSandbox();
-    renderFlow();
+    renderProgram();
 });
 
 function initEditor() {
@@ -180,8 +181,8 @@ function initEditor() {
         indentUnit: 2,
         tabSize: 2,
         lineWrapping: true,
-        theme: currentTheme === "dark" ? "material-darker" : "eclipse",
-        mode: LANGUAGES[currentLanguage].cmMode,
+        theme: currentTheme === "dark"?"material-darker" : "eclipse",
+        mode: "javascript",
         viewportMargin: Infinity,
     });
 }
@@ -192,21 +193,19 @@ function initUI() {
     els.modeCodeBtn.addEventListener("click", () => setMode("code"));
     els.modeFlowBtn.addEventListener("click", () => setMode("flow"));
 
-    els.wrapToggle.addEventListener("change", () => editor.setOption("lineWrapping", els.wrapToggle.checked));
+    els.wrapToggle?.addEventListener("change", () => editor.setOption("lineWrapping", els.wrapToggle.checked));
 
     els.themeBtn.addEventListener("click", () => {
-        currentTheme = currentTheme === "light" ? "dark" : "light";
+        currentTheme = currentTheme === "light"?"dark" : "light";
         localStorage.setItem("cf_theme", currentTheme);
         applyTheme(currentTheme);
-        editor.setOption("theme", currentTheme === "dark" ? "material-darker" : "eclipse");
-        // sandbox bg remains white; keep it predictable
+        editor.setOption("theme", currentTheme === "dark"?"material-darker" : "eclipse");
     });
 
-    els.runBtn.addEventListener("click", runCode);
+    els.runBtn.addEventListener("click", runViaJudge0);
 
     els.newProjectBtn.addEventListener("click", () => {
-        const lang = currentLanguage;
-        editor.setValue(DEFAULT_SNIPPETS[lang] || "");
+        editor.setValue(DEFAULT_SNIPPETS[currentLanguage] || "");
         els.output.textContent = "";
         resetSandbox();
     });
@@ -228,26 +227,24 @@ function initUI() {
         URL.revokeObjectURL(a.href);
     });
 
-    // Flow block add buttons (sidebar chips)
-    document.querySelectorAll("[data-add]").forEach(btn => {
-        btn.addEventListener("click", () => addBlock(btn.getAttribute("data-add")));
-    });
-
     els.generateBtn.addEventListener("click", () => {
-        const code = generateCodeFromFlow(flow, currentLanguage);
+        const code = generateCode(program, currentLanguage);
         editor.setValue(code);
         toast("Generated code into editor.");
         setMode("code");
     });
 
     els.clearFlowBtn.addEventListener("click", () => {
-        flow = [];
-        renderFlow();
+        program = {
+            type: "program",
+            children: []
+        };
+        renderProgram();
     });
 
     els.exportFlowJsonBtn.addEventListener("click", () => {
-        const json = JSON.stringify(flow, null, 2);
-        openModal("Export Flow JSON", `<textarea class="modal-textarea">${escapeHtml(json)}</textarea>`, [{
+        const json = JSON.stringify(program, null, 2);
+        openModal("Export Flow JSON", `<textarea class="modal-textarea"></textarea>`, [{
             label: "Copy",
             kind: "primary",
             onClick: async () => {
@@ -255,17 +252,13 @@ function initUI() {
                 toast("Flow JSON copied.");
             }
         }, ]);
-        // Make textarea editable after insertion
-        const ta = els.modalBody.querySelector("textarea");
-        ta.value = json;
+        els.modalBody.querySelector("textarea").value = json;
     });
 
     els.importFlowJsonBtn.addEventListener("click", () => {
         openModal("Import Flow JSON", `
-      <div class="modal-row">
-        <div class="modal-hint">Paste JSON (exported from this app) to restore the flow.</div>
-        <textarea class="modal-textarea" placeholder='[{"id":"...","type":"start"}, ...]'></textarea>
-      </div>
+      <div class="modal-hint">Paste exported JSON to restore the program.</div>
+      <textarea class="modal-textarea" placeholder='{"type":"program","children":[...]}'></textarea>
     `, [{
             label: "Import",
             kind: "primary",
@@ -273,16 +266,10 @@ function initUI() {
                 const ta = els.modalBody.querySelector("textarea");
                 try {
                     const parsed = JSON.parse(ta.value);
-                    if (!Array.isArray(parsed)) throw new Error("JSON must be an array.");
-                    // shallow validate
-                    parsed.forEach(b => {
-                        if (!b || typeof b !== "object") throw new Error("Invalid block in array.");
-                        if (!b.type) throw new Error("Every block must have 'type'.");
-                        if (!b.id) b.id = uid();
-                    });
-                    flow = parsed;
+                    validateProgram(parsed);
+                    program = parsed;
                     closeModal();
-                    renderFlow();
+                    renderProgram();
                     toast("Flow imported.");
                 } catch (err) {
                     toast(`Import failed: ${err.message}`, true);
@@ -291,11 +278,10 @@ function initUI() {
         }, ]);
     });
 
-    // Save/Load
+    // Save/Load still supported (same endpoints as earlier)
     els.saveBtn.addEventListener("click", () => saveProject());
     els.loadBtn.addEventListener("click", () => loadProjectPicker());
 
-    // Modal close
     els.modalClose.addEventListener("click", closeModal);
     els.modalBackdrop.addEventListener("click", (e) => {
         if (e.target === els.modalBackdrop) closeModal();
@@ -306,19 +292,30 @@ function setMode(mode) {
     const isCode = mode === "code";
     els.codePane.classList.toggle("hidden", !isCode);
     els.flowPane.classList.toggle("hidden", isCode);
-
     els.modeCodeBtn.classList.toggle("active", isCode);
     els.modeFlowBtn.classList.toggle("active", !isCode);
-
-    // Show block add UI always in sidebar, but flow mode is where it matters
 }
 
 function setLanguage(langKey) {
     if (!LANGUAGES[langKey]) return;
     currentLanguage = langKey;
-    editor.setOption("mode", LANGUAGES[langKey].cmMode);
 
-    // If editor looks untouched-ish, load default snippet
+    // Minimal mode mapping for CodeMirror; good enough for highlighting
+    const cmMode = {
+        javascript: "javascript",
+        python: "python",
+        java: "text/x-java",
+        c: "text/x-csrc",
+        cpp: "text/x-c++src",
+        csharp: "text/x-csharp",
+        php: "application/x-httpd-php",
+        ruby: "ruby",
+        go: "go",
+        swift: "swift",
+    } [langKey];
+
+    editor.setOption("mode", cmMode);
+
     const cur = editor.getValue().trim();
     if (!cur || Object.values(DEFAULT_SNIPPETS).some(s => s.trim() === cur)) {
         editor.setValue(DEFAULT_SNIPPETS[langKey] || "");
@@ -329,211 +326,175 @@ function applyTheme(theme) {
     document.documentElement.setAttribute("data-theme", theme);
 }
 
-// --- Runner (JS only)
+// Local sandbox (still useful for JS quick demo)
 function resetSandbox() {
-    // reset iframe document
+    if (!els.sandboxFrame) return;
     els.sandboxFrame.srcdoc = `
-<!doctype html>
-<html><head><meta charset="utf-8" />
-<style>
-  body { font-family: ui-monospace, Menlo, Monaco, Consolas, monospace; padding: 10px; }
-  .line { white-space: pre-wrap; }
-  .err { color: #b22b2b; }
-</style>
-</head>
-<body>
-<div id="root"></div>
+<!doctype html><html><head><meta charset="utf-8" />
+<style>body{font-family:ui-monospace,Menlo,Consolas,monospace;padding:10px}.err{color:#b22b2b}.line{white-space:pre-wrap}</style>
+</head><body><div id="root"></div>
 <script>
-  const root = document.getElementById('root');
-  function line(text, cls){
-    const d = document.createElement('div');
-    d.className = 'line' + (cls ? ' ' + cls : '');
-    d.textContent = text;
-    root.appendChild(d);
-  }
-  console.log = (...args) => line(args.map(a => String(a)).join(' '));
-  console.error = (...args) => line(args.map(a => String(a)).join(' '), 'err');
-  window.addEventListener('error', (e) => line('Error: ' + e.message, 'err'));
-<\/script>
-</body></html>`;
+const root=document.getElementById('root');
+function line(t,c){const d=document.createElement('div');d.className='line'+(c?' '+c:'');d.textContent=t;root.appendChild(d);}
+console.log=(...a)=>line(a.map(x=>String(x)).join(' '));
+console.error=(...a)=>line(a.map(x=>String(x)).join(' '),'err');
+window.addEventListener('error',e=>line('Error: '+e.message,'err'));
+<\/script></body></html>`;
 }
 
-function runCode() {
-    els.output.textContent = "";
-    const lang = currentLanguage;
+/* ---------------------------
+   NESTED FLOW UI
+---------------------------- */
 
-    if (lang !== "javascript") {
-        els.output.textContent =
-            `Running is enabled locally for JavaScript only.
+function renderProgram() {
+    if (!els.flowTree) return;
+    els.flowTree.innerHTML = "";
 
-To run ${LANGUAGES[lang].name}, connect a serverless function to an external runner (e.g. Judge0),
-then POST { language, code } and return stdout/stderr.
+    const rootBranch = renderBranch("Program", program.children, (node) => program.children.push(node));
+    els.flowTree.appendChild(rootBranch);
+}
 
-(Generation + editing still works for all 10 languages.)`;
-        return;
+function renderBranch(title, arr, addFn) {
+    const branch = document.createElement("div");
+    branch.className = "branch";
+    branch.innerHTML = `
+    <div class="branch-head">
+      <div class="branch-title">${escapeHtml(title)}</div>
+      <div class="branch-actions">
+        <button class="mini" data-add="output">+ Output</button>
+        <button class="mini" data-add="assign">+ Assign</button>
+        <button class="mini" data-add="if">+ If</button>
+        <button class="mini" data-add="while">+ While</button>
+      </div>
+    </div>
+    <div class="branch-body"></div>
+  `;
+
+    const body = branch.querySelector(".branch-body");
+    if (!arr.length) {
+        const empty = document.createElement("div");
+        empty.style.color = "rgba(15,27,15,.65)";
+        empty.style.fontSize = "13px";
+        empty.textContent = "No blocks yet. Add one above.";
+        body.appendChild(empty);
+    } else {
+        arr.forEach((node, idx) => body.appendChild(renderNode(node, arr, idx)));
     }
 
-    resetSandbox();
-    const code = editor.getValue();
+    branch.querySelectorAll("[data-add]").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const type = btn.getAttribute("data-add");
+            addFn(makeNode(type));
+            renderProgram();
+        });
+    });
 
-    // Also log to output panel
-    els.output.textContent = "Running JavaScript in sandbox…\n";
-
-    // Inject code after short delay so iframe overrides console first
-    setTimeout(() => {
-        const doc = els.sandboxFrame.contentDocument;
-        const s = doc.createElement("script");
-        s.type = "text/javascript";
-        s.textContent = `
-try {
-${code}
-} catch (e) {
-  console.error(e && e.stack ? e.stack : String(e));
-}`;
-        doc.body.appendChild(s);
-        els.output.textContent += "Done.\n";
-    }, 50);
+    return branch;
 }
 
-// --- Flowchart
-function addBlock(type) {
-    const block = {
+function renderNode(node, parentArr, index) {
+    const wrap = document.createElement("div");
+    wrap.className = "node";
+
+    wrap.innerHTML = `
+    <div class="node-head">
+      <div class="node-type">${escapeHtml(nodeLabel(node))}</div>
+      <div class="node-actions">
+        <button class="mini" data-up>↑</button>
+        <button class="mini" data-down>↓</button>
+        <button class="mini" data-del>✕</button>
+      </div>
+    </div>
+    <div class="node-sub"></div>
+  `;
+
+    // up/down/del
+    wrap.querySelector("[data-up]").addEventListener("click", () => {
+        if (index <= 0) return;
+        [parentArr[index - 1], parentArr[index]] = [parentArr[index], parentArr[index - 1]];
+        renderProgram();
+    });
+    wrap.querySelector("[data-down]").addEventListener("click", () => {
+        if (index >= parentArr.length - 1) return;
+        [parentArr[index + 1], parentArr[index]] = [parentArr[index], parentArr[index + 1]];
+        renderProgram();
+    });
+    wrap.querySelector("[data-del]").addEventListener("click", () => {
+        parentArr.splice(index, 1);
+        renderProgram();
+    });
+
+    const sub = wrap.querySelector(".node-sub");
+
+    // fields + children branches
+    if (node.type === "output") {
+        sub.appendChild(fieldInput("Text", node.text?? "", (v) => node.text = v));
+    }
+
+    if (node.type === "assign") {
+        sub.appendChild(fieldInput("Variable", node.varName?? "x", (v) => node.varName = v));
+        sub.appendChild(fieldInput("Value / expression", node.value?? "0", (v) => node.value = v));
+    }
+
+    if (node.type === "if") {
+        sub.appendChild(fieldInput("Condition", node.condition?? "true", (v) => node.condition = v));
+
+        const kids = document.createElement("div");
+        kids.className = "node-children";
+        kids.appendChild(renderBranch("THEN", node.then, (n) => node.then.push(n)));
+        kids.appendChild(renderBranch("ELSE", node.else, (n) => node.else.push(n)));
+        sub.appendChild(kids);
+    }
+
+    if (node.type === "while") {
+        sub.appendChild(fieldInput("Condition", node.condition?? "true", (v) => node.condition = v));
+
+        const kids = document.createElement("div");
+        kids.className = "node-children";
+        kids.appendChild(renderBranch("BODY", node.body, (n) => node.body.push(n)));
+        sub.appendChild(kids);
+    }
+
+    return wrap;
+}
+
+function nodeLabel(node) {
+    if (node.type === "output") return "OUTPUT";
+    if (node.type === "assign") return "ASSIGN";
+    if (node.type === "if") return "IF";
+    if (node.type === "while") return "WHILE";
+    return node.type.toUpperCase();
+}
+
+function makeNode(type) {
+    if (type === "output") return {
+        id: uid(),
+        type: "output",
+        text: "Hello!"
+    };
+    if (type === "assign") return {
+        id: uid(),
+        type: "assign",
+        varName: "x",
+        value: "10"
+    };
+    if (type === "if") return {
+        id: uid(),
+        type: "if",
+        condition: "x > 5",
+        then: [],
+        else: []
+    };
+    if (type === "while") return {
+        id: uid(),
+        type: "while",
+        condition: "i < 3",
+        body: []
+    };
+    return {
         id: uid(),
         type
     };
-
-    if (type === "output") block.text = "Hello from Flowchart!";
-    if (type === "assign") {
-        block.varName = "x";
-        block.value = "10";
-    }
-    if (type === "if") {
-        block.condition = "x > 5";
-        block.thenText = "Condition is true";
-    }
-    if (type === "while") {
-        block.condition = "i < 3";
-        block.bodyText = "Looping...";
-    }
-
-    // Encourage proper structure if empty
-    if (flow.length === 0 && type !== "start") {
-        flow.push({
-            id: uid(),
-            type: "start"
-        });
-    }
-    flow.push(block);
-    renderFlow();
-}
-
-function renderFlow() {
-    els.flowList.innerHTML = "";
-    flow.forEach((b, idx) => els.flowList.appendChild(renderFlowCard(b, idx)));
-    requestAnimationFrame(drawFlowLinks);
-}
-
-function renderFlowCard(block, index) {
-    const card = document.createElement("div");
-    card.className = "flow-card";
-    card.setAttribute("draggable", "true");
-    card.dataset.id = block.id;
-
-    const typeLabel = block.type.toUpperCase();
-    card.innerHTML = `
-    <div class="flow-card-head">
-      <div class="flow-type">${typeLabel}</div>
-      <div class="flow-meta">
-        <span class="badge">#${index + 1}</span>
-        <button class="icon-btn" data-up title="Move up">↑</button>
-        <button class="icon-btn" data-down title="Move down">↓</button>
-        <button class="icon-btn" data-del title="Delete">✕</button>
-      </div>
-    </div>
-    <div class="flow-fields"></div>
-  `;
-
-    const fields = card.querySelector(".flow-fields");
-    fields.appendChild(buildFields(block));
-
-    // Move / Delete
-    card.querySelector("[data-up]").addEventListener("click", () => {
-        if (index <= 0) return;
-        [flow[index - 1], flow[index]] = [flow[index], flow[index - 1]];
-        renderFlow();
-    });
-    card.querySelector("[data-down]").addEventListener("click", () => {
-        if (index >= flow.length - 1) return;
-        [flow[index + 1], flow[index]] = [flow[index], flow[index + 1]];
-        renderFlow();
-    });
-    card.querySelector("[data-del]").addEventListener("click", () => {
-        flow = flow.filter(x => x.id !== block.id);
-        renderFlow();
-    });
-
-    // Drag reorder
-    card.addEventListener("dragstart", (e) => {
-        card.classList.add("dragging");
-        e.dataTransfer.setData("text/plain", block.id);
-    });
-    card.addEventListener("dragend", () => {
-        card.classList.remove("dragging");
-        requestAnimationFrame(drawFlowLinks);
-    });
-    card.addEventListener("dragover", (e) => {
-        e.preventDefault();
-        const draggedId = e.dataTransfer.getData("text/plain");
-        if (!draggedId || draggedId === block.id) return;
-
-        const draggedIndex = flow.findIndex(x => x.id === draggedId);
-        const targetIndex = flow.findIndex(x => x.id === block.id);
-        if (draggedIndex < 0 || targetIndex < 0) return;
-
-        // Insert dragged before target (simple)
-        const dragged = flow.splice(draggedIndex, 1)[0];
-        flow.splice(targetIndex, 0, dragged);
-        renderFlow();
-    });
-
-    return card;
-}
-
-function buildFields(block) {
-    const wrap = document.createElement("div");
-
-    if (block.type === "output") {
-        wrap.appendChild(fieldInput("Text to output", block.text ?? "", (v) => {
-            block.text = v;
-        }));
-    }
-    if (block.type === "assign") {
-        wrap.appendChild(fieldInput("Variable name", block.varName ?? "", (v) => {
-            block.varName = v;
-        }));
-        wrap.appendChild(fieldInput("Value/expression", block.value ?? "", (v) => {
-            block.value = v;
-        }));
-    }
-    if (block.type === "if") {
-        wrap.appendChild(fieldInput("Condition", block.condition ?? "", (v) => {
-            block.condition = v;
-        }));
-        wrap.appendChild(fieldInput("Then output (simple)", block.thenText ?? "", (v) => {
-            block.thenText = v;
-        }));
-    }
-    if (block.type === "while") {
-        wrap.appendChild(fieldInput("Condition", block.condition ?? "", (v) => {
-            block.condition = v;
-        }));
-        wrap.appendChild(fieldInput("Body output (simple)", block.bodyText ?? "", (v) => {
-            block.bodyText = v;
-        }));
-    }
-
-    // Start / End have no fields
-    return wrap;
 }
 
 function fieldInput(label, value, onChange) {
@@ -549,447 +510,312 @@ function fieldInput(label, value, onChange) {
     return d;
 }
 
-function drawFlowLinks() {
-    // Draw simple connectors from each card to next using SVG lines.
-    // We'll map cards into percentage coords in the SVG viewbox (0..100).
-    const cards = Array.from(els.flowList.querySelectorAll(".flow-card"));
-    if (cards.length <= 1) {
-        els.flowLinks.innerHTML = "";
-        return;
-    }
-
-    const canvasRect = els.flowList.getBoundingClientRect();
-    const points = cards.map(card => {
-        const r = card.getBoundingClientRect();
-        const x = (r.left - canvasRect.left + r.width / 2) / canvasRect.width * 100;
-        const yTop = (r.top - canvasRect.top) / canvasRect.height * 100;
-        const yBottom = (r.bottom - canvasRect.top) / canvasRect.height * 100;
-        return {
-            x,
-            yTop,
-            yBottom
-        };
-    });
-
-    const lines = [];
-    for (let i = 0; i < points.length - 1; i++) {
-        const a = points[i];
-        const b = points[i + 1];
-        const x1 = a.x,
-            y1 = a.yBottom;
-        const x2 = b.x,
-            y2 = b.yTop;
-
-        // Slight curve via quadratic path
-        const midY = (y1 + y2) / 2;
-        lines.push(`<path d="M ${x1} ${y1} Q ${x1} ${midY} ${x2} ${y2}" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="0.5"/>`);
-        // arrowhead near end
-        lines.push(`<circle cx="${x2}" cy="${y2}" r="0.9" fill="rgba(0,0,0,.25)" />`);
-    }
-    els.flowLinks.innerHTML = lines.join("\n");
-}
-
-// --- Code generation
-function generateCodeFromFlow(flowBlocks, lang) {
-    const blocks = ensureStartEnd(flowBlocks);
-
-    const emit = (s) => out.push(s);
-    const out = [];
-
-    const printer = makePrinter(lang);
-    const assigner = makeAssigner(lang);
-    const ifer = makeIf(lang);
-    const whiler = makeWhile(lang);
-    const prelude = makePrelude(lang);
-    const postlude = makePostlude(lang);
-
-    out.push(...prelude);
-
-    for (const b of blocks) {
-        if (b.type === "start" || b.type === "end") continue;
-
-        if (b.type === "output") {
-            emit(printer(b.text ?? ""));
-            continue;
-        }
-        if (b.type === "assign") {
-            emit(assigner(b.varName ?? "x", b.value ?? "0"));
-            continue;
-        }
-        if (b.type === "if") {
-            emit(...ifer(b.condition ?? "true", b.thenText ?? "Condition true"));
-            continue;
-        }
-        if (b.type === "while") {
-            emit(...whiler(b.condition ?? "true", b.bodyText ?? "Loop"));
-            continue;
-        }
-    }
-
-    out.push(...postlude);
-    return out.join("\n");
-}
-
-function ensureStartEnd(arr) {
-    const blocks = [...arr];
-    if (blocks.length === 0) return [{
-        id: uid(),
-        type: "start"
-    }, {
-        id: uid(),
-        type: "end"
-    }];
-    if (blocks[0].type !== "start") blocks.unshift({
-        id: uid(),
-        type: "start"
-    });
-    if (blocks[blocks.length - 1].type !== "end") blocks.push({
-        id: uid(),
-        type: "end"
-    });
-    return blocks;
-}
-
-function makePrelude(lang) {
-    switch (lang) {
-        case "javascript":
-            return [
-                `// Generated by CodeFlow (Flowchart → Code)`,
-                `function main(){`,
-            ];
-        case "python":
-            return [
-                `# Generated by CodeFlow (Flowchart → Code)`,
-                `def main():`,
-            ];
-        case "java":
-            return [
-                `// Generated by CodeFlow (Flowchart → Code)`,
-                `public class Main {`,
-                `  public static void main(String[] args) {`,
-            ];
-        case "c":
-            return [
-                `// Generated by CodeFlow (Flowchart → Code)`,
-                `#include <stdio.h>`,
-                ``,
-                `int main(void){`,
-            ];
-        case "cpp":
-            return [
-                `// Generated by CodeFlow (Flowchart → Code)`,
-                `#include <iostream>`,
-                `using namespace std;`,
-                ``,
-                `int main(){`,
-            ];
-        case "csharp":
-            return [
-                `// Generated by CodeFlow (Flowchart → Code)`,
-                `using System;`,
-                ``,
-                `class Program {`,
-                `  static void Main(){`,
-            ];
-        case "php":
-            return [
-                `<?php`,
-                `// Generated by CodeFlow (Flowchart → Code)`,
-            ];
-        case "ruby":
-            return [
-                `# Generated by CodeFlow (Flowchart → Code)`,
-            ];
-        case "go":
-            return [
-                `// Generated by CodeFlow (Flowchart → Code)`,
-                `package main`,
-                `import "fmt"`,
-                ``,
-                `func main(){`,
-            ];
-        case "swift":
-            return [
-                `// Generated by CodeFlow (Flowchart → Code)`,
-                `import Foundation`,
-            ];
-        default:
-            return [`// Generated by CodeFlow`];
-    }
-}
-
-function makePostlude(lang) {
-    switch (lang) {
-        case "javascript":
-            return [
-                `}`,
-                `main();`,
-            ];
-        case "python":
-            return [
-                ``,
-                `if __name__ == "__main__":`,
-                `    main()`,
-            ];
-        case "java":
-            return [
-                `  }`,
-                `}`,
-            ];
-        case "c":
-        case "cpp":
-            return [
-                `  return 0;`,
-                `}`,
-            ];
-        case "csharp":
-            return [
-                `  }`,
-                `}`,
-            ];
-        case "php":
-            return [
-                ``,
-            ];
-        case "go":
-            return [
-                `}`,
-            ];
-        case "swift":
-            return [
-                ``,
-            ];
-        case "ruby":
-            return [
-                ``,
-            ];
-        default:
-            return [];
-    }
-}
-
-function indentLine(lang, line, level = 1) {
-    const pad = (lang === "python") ? "    " : "  ";
-    return pad.repeat(level) + line;
-}
-
-function makePrinter(lang) {
-    return (text) => {
-        const safe = String(text).replaceAll("\\", "\\\\").replaceAll('"', '\\"');
-        switch (lang) {
-            case "javascript":
-                return indentLine(lang, `console.log("${safe}");`);
-            case "python":
-                return indentLine(lang, `print("${safe}")`);
-            case "java":
-                return indentLine(lang, `System.out.println("${safe}");`, 2);
-            case "c":
-                return indentLine(lang, `printf("${safe}\\n");`);
-            case "cpp":
-                return indentLine(lang, `cout << "${safe}" << endl;`);
-            case "csharp":
-                return indentLine(lang, `Console.WriteLine("${safe}");`, 2);
-            case "php":
-                return `echo "${safe}\\n";`;
-            case "ruby":
-                return `puts "${safe}"`;
-            case "go":
-                return indentLine(lang, `fmt.Println("${safe}")`);
-            case "swift":
-                return `print("${safe}")`;
-            default:
-                return `// output: ${text}`;
-        }
+function validateProgram(p) {
+    if (!p || typeof p !== "object") throw new Error("Program must be an object.");
+    if (p.type !== "program") throw new Error("Root type must be 'program'.");
+    if (!Array.isArray(p.children)) throw new Error("Program.children must be an array.");
+    const walk = (arr) => {
+        arr.forEach(n => {
+            if (!n || typeof n !== "object") throw new Error("Invalid node.");
+            if (!n.type) throw new Error("Node missing type.");
+            if (!n.id) n.id = uid();
+            if (n.type === "if") {
+                if (!Array.isArray(n.then) || !Array.isArray(n.else)) throw new Error("If node must have then/else arrays.");
+                walk(n.then);
+                walk(n.else);
+            }
+            if (n.type === "while") {
+                if (!Array.isArray(n.body)) throw new Error("While node must have body array.");
+                walk(n.body);
+            }
+        });
     };
+    walk(p.children);
 }
 
-function makeAssigner(lang) {
-    return (varName, value) => {
+/* ---------------------------
+   CODE GENERATION (recursive)
+---------------------------- */
+
+function generateCode(program, lang) {
+    const lines = [];
+    const emit = (s) => lines.push(s);
+
+    const IND = (lvl) => (lang === "python"?"    " : "  ").repeat(lvl);
+
+    // Prelude
+    if (lang === "javascript") {
+        emit(`// Generated by CodeFlow`);
+        emit(`function main(){`);
+    } else if (lang === "python") {
+        emit(`# Generated by CodeFlow`);
+        emit(`def main():`);
+    } else if (lang === "java") {
+        emit(`// Generated by CodeFlow`);
+        emit(`public class Main {`);
+        emit(`  public static void main(String[] args) {`);
+    } else if (lang === "c") {
+        emit(`// Generated by CodeFlow`);
+        emit(`#include <stdio.h>`);
+        emit(``);
+        emit(`int main(void){`);
+    } else if (lang === "cpp") {
+        emit(`// Generated by CodeFlow`);
+        emit(`#include <iostream>`);
+        emit(`using namespace std;`);
+        emit(``);
+        emit(`int main(){`);
+    } else if (lang === "csharp") {
+        emit(`// Generated by CodeFlow`);
+        emit(`using System;`);
+        emit(``);
+        emit(`class Program {`);
+        emit(`  static void Main(){`);
+    } else if (lang === "php") {
+        emit(`<?php`);
+        emit(`// Generated by CodeFlow`);
+    } else if (lang === "go") {
+        emit(`// Generated by CodeFlow`);
+        emit(`package main`);
+        emit(`import "fmt"`);
+        emit(``);
+        emit(`func main(){`);
+    } else if (lang === "ruby") {
+        emit(`# Generated by CodeFlow`);
+    } else if (lang === "swift") {
+        emit(`// Generated by CodeFlow`);
+        emit(`import Foundation`);
+    }
+
+    const baseIndent =
+        (lang === "java" || lang === "csharp")?2 :
+        (lang === "php" || lang === "ruby" || lang === "swift")?0 :
+        (lang === "go" || lang === "c" || lang === "cpp" || lang === "javascript" || lang === "python")?1 : 0;
+
+    const printLine = (text, lvl) => {
+        const safe = String(text).replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+        if (lang === "javascript") emit(`${IND(lvl)}console.log("${safe}");`);
+        else if (lang === "python") emit(`${IND(lvl)}print("${safe}")`);
+        else if (lang === "java") emit(`${IND(lvl)}System.out.println("${safe}");`);
+        else if (lang === "c") emit(`${IND(lvl)}printf("${safe}\\n");`);
+        else if (lang === "cpp") emit(`${IND(lvl)}cout << "${safe}" << endl;`);
+        else if (lang === "csharp") emit(`${IND(lvl)}Console.WriteLine("${safe}");`);
+        else if (lang === "php") emit(`${IND(lvl)}echo "${safe}\\n";`);
+        else if (lang === "ruby") emit(`${IND(lvl)}puts "${safe}"`);
+        else if (lang === "go") emit(`${IND(lvl)}fmt.Println("${safe}")`);
+        else if (lang === "swift") emit(`${IND(lvl)}print("${safe}")`);
+        else emit(`${IND(lvl)}// output: ${safe}`);
+    };
+
+    const assignLine = (varName, value, lvl) => {
         const v = (varName || "x").trim() || "x";
         const expr = (value || "0").trim() || "0";
-
-        switch (lang) {
-            case "javascript":
-                return indentLine(lang, `let ${v} = ${expr};`);
-            case "python":
-                return indentLine(lang, `${v} = ${expr}`);
-            case "java":
-                return indentLine(lang, `var ${v} = ${expr};`, 2);
-            case "c":
-                return indentLine(lang, `int ${v} = ${expr};`);
-            case "cpp":
-                return indentLine(lang, `auto ${v} = ${expr};`);
-            case "csharp":
-                return indentLine(lang, `var ${v} = ${expr};`, 2);
-            case "php":
-                return `$${v} = ${expr};`;
-            case "ruby":
-                return `${v} = ${expr}`;
-            case "go":
-                return indentLine(lang, `${v} := ${expr}`);
-            case "swift":
-                return `let ${v} = ${expr}`;
-            default:
-                return `// assign ${v} = ${expr}`;
-        }
+        if (lang === "javascript") emit(`${IND(lvl)}let ${v} = ${expr};`);
+        else if (lang === "python") emit(`${IND(lvl)}${v} = ${expr}`);
+        else if (lang === "java") emit(`${IND(lvl)}var ${v} = ${expr};`);
+        else if (lang === "c") emit(`${IND(lvl)}int ${v} = ${expr};`);
+        else if (lang === "cpp") emit(`${IND(lvl)}auto ${v} = ${expr};`);
+        else if (lang === "csharp") emit(`${IND(lvl)}var ${v} = ${expr};`);
+        else if (lang === "php") emit(`${IND(lvl)}$${v} = ${expr};`);
+        else if (lang === "ruby") emit(`${IND(lvl)}${v} = ${expr}`);
+        else if (lang === "go") emit(`${IND(lvl)}${v} := ${expr}`);
+        else if (lang === "swift") emit(`${IND(lvl)}let ${v} = ${expr}`);
+        else emit(`${IND(lvl)}// ${v} = ${expr}`);
     };
-}
 
-function makeIf(lang) {
-    const printer = makePrinter(lang);
-    return (cond, thenText) => {
+    const openIf = (cond, lvl) => {
         const c = (cond || "true").trim() || "true";
-        switch (lang) {
-            case "python":
-                return [
-                    indentLine(lang, `if ${c}:`),
-                    indentLine(lang, printer(thenText).trim(), 2),
-                ];
-            case "java":
-                return [
-                    indentLine(lang, `if (${c}) {`, 2),
-                    indentLine(lang, printer(thenText).trim(), 3),
-                    indentLine(lang, `}`, 2),
-                ];
-            case "c":
-            case "cpp":
-                return [
-                    indentLine(lang, `if (${c}) {`),
-                    indentLine(lang, printer(thenText).trim(), 2),
-                    indentLine(lang, `}`),
-                ];
-            case "csharp":
-                return [
-                    indentLine(lang, `if (${c}) {`, 2),
-                    indentLine(lang, printer(thenText).trim(), 3),
-                    indentLine(lang, `}`, 2),
-                ];
-            case "php":
-                return [
-                    `if (${c}) {`,
-                    `  ${printer(thenText).trim()}`,
-                    `}`,
-                ];
-            case "ruby":
-                return [
-                    `if ${c}`,
-                    `  ${printer(thenText).trim()}`,
-                    `end`,
-                ];
-            case "go":
-                return [
-                    indentLine(lang, `if ${c} {`),
-                    indentLine(lang, printer(thenText).trim(), 2),
-                    indentLine(lang, `}`),
-                ];
-            case "swift":
-                return [
-                    `if ${c} {`,
-                    `  ${printer(thenText).trim()}`,
-                    `}`,
-                ];
-            case "javascript":
-            default:
-                return [
-                    indentLine(lang, `if (${c}) {`),
-                    indentLine(lang, printer(thenText).trim(), 2),
-                    indentLine(lang, `}`),
-                ];
-        }
+        if (lang === "python") emit(`${IND(lvl)}if ${c}:`);
+        else if (lang === "ruby") emit(`${IND(lvl)}if ${c}`);
+        else if (lang === "go") emit(`${IND(lvl)}if ${c} {`);
+        else emit(`${IND(lvl)}if (${c}) {`);
     };
-}
 
-function makeWhile(lang) {
-    const printer = makePrinter(lang);
-    return (cond, bodyText) => {
+    const elseIf = (lvl) => {
+        if (lang === "python") emit(`${IND(lvl)}else:`);
+        else if (lang === "ruby") emit(`${IND(lvl)}else`);
+        else emit(`${IND(lvl)}} else {`);
+    };
+
+    const closeIf = (lvl) => {
+        if (lang === "python") return;
+        if (lang === "ruby") emit(`${IND(lvl)}end`);
+        else emit(`${IND(lvl)}}`);
+    };
+
+    const openWhile = (cond, lvl) => {
         const c = (cond || "true").trim() || "true";
-        switch (lang) {
-            case "python":
-                return [
-                    indentLine(lang, `while ${c}:`),
-                    indentLine(lang, printer(bodyText).trim(), 2),
-                    indentLine(lang, `break  # remove this if you want a real loop`, 2),
-                ];
-            case "java":
-                return [
-                    indentLine(lang, `while (${c}) {`, 2),
-                    indentLine(lang, printer(bodyText).trim(), 3),
-                    indentLine(lang, `break;`, 3),
-                    indentLine(lang, `}`, 2),
-                ];
-            case "c":
-            case "cpp":
-                return [
-                    indentLine(lang, `while (${c}) {`),
-                    indentLine(lang, printer(bodyText).trim(), 2),
-                    indentLine(lang, `break;`, 2),
-                    indentLine(lang, `}`),
-                ];
-            case "csharp":
-                return [
-                    indentLine(lang, `while (${c}) {`, 2),
-                    indentLine(lang, printer(bodyText).trim(), 3),
-                    indentLine(lang, `break;`, 3),
-                    indentLine(lang, `}`, 2),
-                ];
-            case "php":
-                return [
-                    `while (${c}) {`,
-                    `  ${printer(bodyText).trim()}`,
-                    `  break;`,
-                    `}`,
-                ];
-            case "ruby":
-                return [
-                    `while ${c}`,
-                    `  ${printer(bodyText).trim()}`,
-                    `  break`,
-                    `end`,
-                ];
-            case "go":
-                return [
-                    indentLine(lang, `for ${c} {`),
-                    indentLine(lang, printer(bodyText).trim(), 2),
-                    indentLine(lang, `break`, 2),
-                    indentLine(lang, `}`),
-                ];
-            case "swift":
-                return [
-                    `while ${c} {`,
-                    `  ${printer(bodyText).trim()}`,
-                    `  break`,
-                    `}`,
-                ];
-            case "javascript":
-            default:
-                return [
-                    indentLine(lang, `while (${c}) {`),
-                    indentLine(lang, printer(bodyText).trim(), 2),
-                    indentLine(lang, `break; // remove this if you want a real loop`, 2),
-                    indentLine(lang, `}`),
-                ];
+        if (lang === "python") emit(`${IND(lvl)}while ${c}:`);
+        else if (lang === "ruby") emit(`${IND(lvl)}while ${c}`);
+        else if (lang === "go") emit(`${IND(lvl)}for ${c} {`);
+        else if (lang === "swift") emit(`${IND(lvl)}while ${c} {`);
+        else emit(`${IND(lvl)}while (${c}) {`);
+    };
+
+    const closeWhile = (lvl) => {
+        if (lang === "python") return;
+        if (lang === "ruby") emit(`${IND(lvl)}end`);
+        else emit(`${IND(lvl)}}`);
+    };
+
+    const walk = (nodes, lvl) => {
+        for (const n of nodes) {
+            if (n.type === "output") printLine(n.text?? "", lvl);
+            else if (n.type === "assign") assignLine(n.varName, n.value, lvl);
+            else if (n.type === "if") {
+                openIf(n.condition, lvl);
+                walk(n.then || [], lvl + (lang === "python"?1 : 1));
+                const hasElse = (n.else || []).length > 0;
+                if (hasElse) {
+                    if (lang === "python") elseIf(lvl);
+                    else elseIf(lvl);
+                    walk(n.else || [], lvl + (lang === "python"?1 : 1));
+                }
+                closeIf(lvl);
+            } else if (n.type === "while") {
+                openWhile(n.condition, lvl);
+                walk(n.body || [], lvl + (lang === "python"?1 : 1));
+                // safety break if user leaves body empty and condition could be true forever:
+                if ((n.body || []).length === 0) {
+                    if (lang === "python") emit(`${IND(lvl + 1)}break  # add body blocks or remove this`);
+                    else emit(`${IND(lvl + 1)}break; // add body blocks or remove this`);
+                }
+                closeWhile(lvl);
+            } else {
+                emit(`${IND(lvl)}// Unsupported node type: ${n.type}`);
+            }
         }
     };
+
+    walk(program.children || [], baseIndent);
+
+    // Postlude
+    if (lang === "javascript") {
+        emit(`}`);
+        emit(`main();`);
+    } else if (lang === "python") {
+        emit(``);
+        emit(`if __name__ == "__main__":`);
+        emit(`    main()`);
+    } else if (lang === "java") {
+        emit(`  }`);
+        emit(`}`);
+    } else if (lang === "c" || lang === "cpp") {
+        emit(`  return 0;`);
+        emit(`}`);
+    } else if (lang === "csharp") {
+        emit(`  }`);
+        emit(`}`);
+    } else if (lang === "go") {
+        emit(`}`);
+    }
+
+    return lines.join("\n");
 }
 
-// --- Save/Load via API (optional)
+/* ---------------------------
+   JUDGE0 RUNNER
+---------------------------- */
+
+async function ensureJudge0Languages() {
+    if (judge0Languages) return judge0Languages;
+    const res = await fetch("/api/languages");
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || "Failed to load Judge0 languages.");
+    judge0Languages = data.languages || [];
+    return judge0Languages;
+}
+
+function pickJudge0LanguageId(all, langKey) {
+    const hint = LANGUAGES[langKey]?.judge0Hint || LANGUAGES[langKey]?.name || langKey;
+
+    // Judge0 language names can be like:
+    // "JavaScript (Node.js 20.11.1)" / "Python (3.11.2)" / etc.
+    // We'll fuzzy-match.
+    const normalized = (s) => String(s).toLowerCase();
+
+    const candidates = all
+        .map(x => ({
+            id: x.id,
+            name: x.name
+        }))
+        .filter(x => x && x.id && x.name);
+
+    // Prefer startsWith match
+    const start = candidates.find(c => normalized(c.name).startsWith(normalized(hint)));
+    if (start) return start.id;
+
+    // Fallback contains match
+    const contains = candidates.find(c => normalized(c.name).includes(normalized(hint)));
+    if (contains) return contains.id;
+
+    return null;
+}
+
+async function runViaJudge0() {
+    els.output.textContent = "";
+    toast(`Submitting to Judge0 (${LANGUAGES[currentLanguage].name})…`);
+
+    try {
+        const langs = await ensureJudge0Languages();
+        const language_id = pickJudge0LanguageId(langs, currentLanguage);
+        if (!language_id) {
+            throw new Error(`Couldn't map ${LANGUAGES[currentLanguage].name} to a Judge0 language_id. Check /languages on your Judge0.`);
+        }
+
+        const payload = {
+            language_id,
+            source_code: editor.getValue(),
+            stdin: "", // you can add a UI input later
+        };
+
+        const res = await fetch("/api/run", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "Run failed.");
+
+        const out = [];
+        out.push(`Status: ${data.status?.description || "?"} (id ${data.status?.id ?? "?"})`);
+        if (data.time != null) out.push(`Time: ${data.time}s`);
+        if (data.memory != null) out.push(`Memory: ${data.memory} KB`);
+
+        if (data.compile_output) out.push(`\n--- compile_output ---\n${data.compile_output}`);
+        if (data.stdout) out.push(`\n--- stdout ---\n${data.stdout}`);
+        if (data.stderr) out.push(`\n--- stderr ---\n${data.stderr}`);
+        if (data.message) out.push(`\n--- message ---\n${data.message}`);
+
+        els.output.textContent = out.join("\n");
+        toast("Done.");
+    } catch (err) {
+        toast(err.message, true);
+    }
+}
+
+/* ---------------------------
+   SAVE/LOAD (unchanged behaviour)
+---------------------------- */
+
 async function saveProject() {
     const payload = {
         language: currentLanguage,
         code: editor.getValue(),
-        flow,
+        flow: program,
         title: `Project (${LANGUAGES[currentLanguage].name})`,
     };
 
     openModal("Save Project", `
-    <div class="modal-row">
-      <div class="modal-hint">Name your project (stored in Supabase via /api/saveProject).</div>
-      <div class="field">
-        <label>Project name</label>
-        <input id="projName" type="text" value="${escapeHtml(payload.title)}"/>
-      </div>
-      <div class="modal-hint subtle">If Supabase env vars aren't set on Vercel, save will fail.</div>
+    <div class="modal-hint">Name your project (stored in Supabase via /api/saveProject).</div>
+    <div class="field">
+      <label>Project name</label>
+      <input id="projName" type="text" value="${escapeHtml(payload.title)}"/>
     </div>
+    <div class="modal-hint subtle">If Supabase env vars aren’t set on Vercel, save will fail.</div>
   `, [{
         label: "Save",
         kind: "primary",
@@ -1057,9 +883,12 @@ async function loadProjectPicker() {
                         setLanguage(proj.language);
                     }
                     if (typeof proj?.code === "string") editor.setValue(proj.code);
-                    if (Array.isArray(proj?.flow)) {
-                        flow = proj.flow;
-                        renderFlow();
+
+                    // New nested format: proj.flow is {type:"program", children:[...]}
+                    if (proj?.flow) {
+                        validateProgram(proj.flow);
+                        program = proj.flow;
+                        renderProgram();
                     }
 
                     closeModal();
@@ -1075,23 +904,24 @@ async function loadProjectPicker() {
     }
 }
 
-// --- Modal helpers
+/* ---------------------------
+   MODAL + UTIL
+---------------------------- */
+
 function openModal(title, bodyHtml, actions) {
     els.modalTitle.textContent = title;
     els.modalBody.innerHTML = bodyHtml;
 
-    // foot buttons
     els.modalFoot.innerHTML = "";
     (actions || []).forEach(a => {
         const b = document.createElement("button");
-        b.className = `btn ${a.kind === "primary" ? "primary" : ""}`;
+        b.className = `btn ${a.kind === "primary"?"primary" : ""}`;
         b.type = "button";
         b.textContent = a.label;
         b.addEventListener("click", a.onClick);
         els.modalFoot.appendChild(b);
     });
 
-    // Add a cancel by default
     const cancel = document.createElement("button");
     cancel.className = "btn";
     cancel.type = "button";
@@ -1099,9 +929,7 @@ function openModal(title, bodyHtml, actions) {
     cancel.addEventListener("click", closeModal);
     els.modalFoot.appendChild(cancel);
 
-    // Inject minimal modal styling extras (keep file count small)
     injectModalExtras();
-
     els.modalBackdrop.classList.remove("hidden");
 }
 
@@ -1113,7 +941,7 @@ function closeModal() {
 }
 
 function toast(msg, isError = false) {
-    els.output.textContent = (isError ? "Error: " : "") + msg + "\n" + els.output.textContent;
+    els.output.textContent = (isError?"Error: " : "") + msg + "\n" + els.output.textContent;
 }
 
 function escapeHtml(s) {

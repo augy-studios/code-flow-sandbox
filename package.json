@@ -1,5 +1,5 @@
 {
-    "name": "codeflow-playground",
+    "name": "codeflow-sandbox",
     "private": true,
     "type": "module",
     "dependencies": {

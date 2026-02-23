@@ -24,7 +24,7 @@ export default async function handler(req, res) {
             data,
             error
         } = await supabase
-            .from("codeflow")
+            .from("projects")
             .select("id,title,language,code,flow,updated_at")
             .eq("id", id)
             .single();
@@ -33,8 +33,31 @@ export default async function handler(req, res) {
             error: error.message
         });
 
+        // NEW: ensure flow is always returned as { type:"program", children:[...] }
+        let flowObj = data.flow;
+        if (Array.isArray(flowObj)) {
+            flowObj = {
+                type: "program",
+                children: flowObj
+            };
+        } else if (!flowObj || typeof flowObj !== "object") {
+            flowObj = {
+                type: "program",
+                children: []
+            };
+        } else if (flowObj.type !== "program" || !Array.isArray(flowObj.children)) {
+            // last-resort sanitise
+            flowObj = {
+                type: "program",
+                children: Array.isArray(flowObj.children) ? flowObj.children : []
+            };
+        }
+
         return res.status(200).json({
-            project: data
+            project: {
+                ...data,
+                flow: flowObj,
+            },
         });
     } catch (err) {
         return res.status(500).json({

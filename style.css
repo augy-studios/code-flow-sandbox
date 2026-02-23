@@ -592,3 +592,140 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* Nested flow builder */
+.flow2-wrap {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 14px;
+  padding: 14px;
+}
+
+.flow2-canvas {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, .08);
+  overflow: hidden;
+  min-height: 640px;
+}
+
+.flow2-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, 0));
+}
+
+.flow2-toolbar-title {
+  font-weight: 950;
+}
+
+.flow2-toolbar-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.flow2-tree {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.branch {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--shadow-2);
+  overflow: hidden;
+}
+
+.branch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.branch-title {
+  font-weight: 950;
+  letter-spacing: .2px;
+}
+
+.branch-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.branch-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.node {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, .03);
+  padding: 10px;
+}
+
+.node-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.node-type {
+  font-weight: 950;
+}
+
+.node-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.node-sub {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.node-children {
+  padding-left: 12px;
+  border-left: 2px dashed rgba(0, 0, 0, .12);
+}
+
+.mini {
+  padding: 6px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  cursor: pointer;
+  font-weight: 900;
+  font-size: 13px;
+}
+
+.flow2-help {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: var(--shadow-2);
+  padding: 14px;
+  height: fit-content;
+}
+
+@media (max-width: 1050px) {
+  .flow2-wrap {
+    grid-template-columns: 1fr;
+  }
+}

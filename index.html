@@ -22,12 +22,14 @@
     <meta charset="utf-8">
     <title>Code Flow Sandbox | UwU Apps</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="A multi-language code playground where you can build logic interchangeably using drag-and-drop flowcharts or a code editor.">
+    <meta name="description"
+        content="A multi-language code playground where you can build logic interchangeably using drag-and-drop flowcharts or a code editor.">
 
     <meta property="og:type" content="website">
     <meta property="og:title" content="Code Flow Sandbox | UwU Apps" />
     <meta property="og:site_name" content="UwU Apps" />
-    <meta property="og:description" content="A multi-language code playground where you can build logic interchangeably using drag-and-drop flowcharts or a code editor." />
+    <meta property="og:description"
+        content="A multi-language code playground where you can build logic interchangeably using drag-and-drop flowcharts or a code editor." />
 
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Jua">
     <link rel="stylesheet" href="/style.css">
@@ -185,23 +187,29 @@
                         </div>
                     </div>
 
-                    <div class="flow-wrap">
-                        <div class="flow-canvas">
-                            <svg id="flowLinks" class="flow-links" viewBox="0 0 100 100"
-                                preserveAspectRatio="none"></svg>
-                            <div id="flowList" class="flow-list" aria-label="Flowchart blocks list"></div>
+                    <div class="flow2-wrap">
+                        <div class="flow2-canvas">
+                            <div class="flow2-toolbar">
+                                <div class="flow2-toolbar-title">Program</div>
+                                <div class="flow2-toolbar-actions">
+                                    <button id="generateBtn" class="btn small primary" type="button">Generate
+                                        Code</button>
+                                    <button id="clearFlowBtn" class="btn small" type="button">Clear</button>
+                                </div>
+                            </div>
+                            <div id="flowTree" class="flow2-tree"></div>
                         </div>
 
-                        <div class="flow-help">
-                            <div class="flow-help-title">How it works</div>
+                        <div class="flow2-help">
+                            <div class="flow-help-title">Low-code (nested)</div>
                             <ul class="flow-help-list">
-                                <li>Add blocks from the sidebar</li>
-                                <li>Drag blocks to reorder</li>
-                                <li>Edit fields inside each block</li>
-                                <li>Generate code into the code editor</li>
+                                <li>Add blocks into Program / THEN / ELSE / BODY</li>
+                                <li>Blocks can nest infinitely</li>
+                                <li>Generate code into the editor</li>
+                                <li>Run via Judge0 (serverless)</li>
                             </ul>
                             <div class="flow-help-warn">
-                                One-way conversion: Flow → Code. (Parsing Code → Flow is intentionally not automatic.)
+                                Flow → Code is supported. Code → Flow is not automatic.
                             </div>
                         </div>
                     </div>

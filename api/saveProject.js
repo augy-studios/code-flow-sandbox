@@ -33,19 +33,36 @@ export default async function handler(req, res) {
             });
         }
 
+        // NEW: flow is an object (program), but keep backwards compatibility:
+        // - if flow is an array (old format), wrap it into a program object
+        let flowObj;
+        if (flow && typeof flow === "object" && !Array.isArray(flow)) {
+            flowObj = flow;
+        } else if (Array.isArray(flow)) {
+            flowObj = {
+                type: "program",
+                children: flow
+            };
+        } else {
+            flowObj = {
+                type: "program",
+                children: []
+            };
+        }
+
         const payload = {
             title,
             language,
             code,
-            flow: Array.isArray(flow) ? flow : [],
-            updated_at: new Date().toISOString()
+            flow: flowObj,
+            updated_at: new Date().toISOString(),
         };
 
         const {
             data,
             error
         } = await supabase
-            .from("codeflow")
+            .from("projects")
             .insert(payload)
             .select("id")
             .single();
