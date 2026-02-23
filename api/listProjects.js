@@ -19,7 +19,7 @@ export default async function handler(req, res) {
             data,
             error
         } = await supabase
-            .from("projects")
+            .from("codeflow")
             .select("id,title,language,updated_at")
             .order("updated_at", {
                 ascending: false
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
         });
 
         return res.status(200).json({
-            projects: data || []
+            codeflow: data || []
         });
     } catch (err) {
         return res.status(500).json({

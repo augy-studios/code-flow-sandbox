@@ -62,7 +62,7 @@ export default async function handler(req, res) {
             data,
             error
         } = await supabase
-            .from("projects")
+            .from("codeflow")
             .insert(payload)
             .select("id")
             .single();

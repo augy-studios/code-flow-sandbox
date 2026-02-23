@@ -24,7 +24,7 @@ export default async function handler(req, res) {
             data,
             error
         } = await supabase
-            .from("projects")
+            .from("codeflow")
             .select("id,title,language,code,flow,updated_at")
             .eq("id", id)
             .single();
