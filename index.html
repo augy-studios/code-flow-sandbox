@@ -20,34 +20,207 @@
     <link rel="manifest" href="/manifest.json" />
 
     <meta charset="utf-8">
-    <title>Template | UwU Apps</title>
+    <title>Code Flow Sandbox | UwU Apps</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="A simple template app; view live template at a glance!">
+    <meta name="description" content="A multi-language code playground where you can build logic interchangeably using drag-and-drop flowcharts or a code editor.">
 
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Template | UwU Apps" />
+    <meta property="og:title" content="Code Flow Sandbox | UwU Apps" />
     <meta property="og:site_name" content="UwU Apps" />
-    <meta property="og:description" content="A simple template app; view live template at a glance!" />
+    <meta property="og:description" content="A multi-language code playground where you can build logic interchangeably using drag-and-drop flowcharts or a code editor." />
 
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Jua">
     <link rel="stylesheet" href="/style.css">
 
+    <!-- CodeMirror 5 (CDN) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/material-darker.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/theme/eclipse.css">
+
+    <script defer src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.js"></script>
+
+    <!-- Modes (10 languages) -->
+    <script defer src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/javascript/javascript.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/python/python.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/clike/clike.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/php/php.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/ruby/ruby.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/go/go.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/mode/swift/swift.js"></script>
+
     <!-- Embed Image -->
-    <link rel="apple-touch-icon" href="/templateicon1.png">
+    <link rel="apple-touch-icon" href="/cpgicon1.png">
     <link rel="icon" href="/favicon.ico">
     <link rel="shortcut icon" href="/favicon.ico">
     <meta name="twitter:card" content="summary">
-    <meta name="twitter:image:src" content="/templateicon1.png">
-    <meta property="og:image" content="/templateicon1.png" />
+    <meta name="twitter:image:src" content="/cpgicon1.png">
+    <meta property="og:image" content="/cpgicon1.png" />
 
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <script defer="" src="https://use.fontawesome.com/releases/v6.5.2/js/all.js"></script>
+
+    <script defer src="/script.js"></script>
 </head>
 
 <body>
-    Template
+    <div class="app">
+        <header class="topbar">
+            <div class="brand">
+                <div class="logo">CF</div>
+                <div>
+                    <div class="brand-title">CodeFlow Playground</div>
+                    <div class="brand-sub">Code ↔ Flowchart for 10 languages</div>
+                </div>
+            </div>
 
-    <script src="/script.js"></script>
+            <div class="top-actions">
+                <div class="segmented" role="tablist" aria-label="Mode switch">
+                    <button id="modeCodeBtn" class="seg-btn active" type="button">Code</button>
+                    <button id="modeFlowBtn" class="seg-btn" type="button">Flowchart</button>
+                </div>
+
+                <div class="pill">
+                    <span class="pill-label">Language</span>
+                    <select id="languageSelect" class="select">
+                        <option value="javascript">JavaScript</option>
+                        <option value="python">Python</option>
+                        <option value="java">Java</option>
+                        <option value="c">C</option>
+                        <option value="cpp">C++</option>
+                        <option value="csharp">C#</option>
+                        <option value="php">PHP</option>
+                        <option value="ruby">Ruby</option>
+                        <option value="go">Go</option>
+                        <option value="swift">Swift</option>
+                    </select>
+                </div>
+
+                <button id="runBtn" class="btn primary" type="button">Run</button>
+                <button id="saveBtn" class="btn" type="button">Save</button>
+                <button id="loadBtn" class="btn" type="button">Load</button>
+
+                <button id="themeBtn" class="btn ghost" type="button" title="Toggle theme">Theme</button>
+            </div>
+        </header>
+
+        <main class="main">
+            <aside class="sidebar">
+                <div class="card">
+                    <div class="card-title">Quick actions</div>
+                    <div class="card-body">
+                        <button id="newProjectBtn" class="btn full" type="button">New project</button>
+                        <button id="copyBtn" class="btn full" type="button">Copy code</button>
+                        <button id="downloadBtn" class="btn full" type="button">Download .txt</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Flowchart blocks</div>
+                    <div class="card-sub">Shown in Flowchart mode</div>
+                    <div class="card-body">
+                        <div class="block-grid">
+                            <button class="chip" data-add="start" type="button">Start</button>
+                            <button class="chip" data-add="end" type="button">End</button>
+                            <button class="chip" data-add="output" type="button">Output</button>
+                            <button class="chip" data-add="assign" type="button">Assign</button>
+                            <button class="chip" data-add="if" type="button">If</button>
+                            <button class="chip" data-add="while" type="button">While</button>
+                        </div>
+                        <div class="hint">
+                            Tip: add blocks, reorder them, then “Generate Code”.
+                        </div>
+                        <button id="generateBtn" class="btn primary full" type="button">Generate Code</button>
+                        <button id="clearFlowBtn" class="btn full" type="button">Clear Flow</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Output</div>
+                    <div class="card-sub">Run results (JS only in-browser)</div>
+                    <div class="card-body">
+                        <pre id="output" class="output" aria-live="polite"></pre>
+                    </div>
+                </div>
+            </aside>
+
+            <section class="workspace">
+                <!-- CODE MODE -->
+                <div id="codePane" class="pane">
+                    <div class="pane-head">
+                        <div class="pane-title">Editor</div>
+                        <div class="pane-actions">
+                            <label class="toggle">
+                                <input id="wrapToggle" type="checkbox" checked />
+                                <span>Wrap</span>
+                            </label>
+                            <label class="toggle">
+                                <input id="lintHintToggle" type="checkbox" checked />
+                                <span>Hints</span>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="editor-shell">
+                        <textarea id="codeEditor"></textarea>
+                    </div>
+
+                    <div class="note">
+                        Running code is implemented **locally for JavaScript**. For other languages, this project
+                        includes an easy hook to
+                        connect to an external runner later (e.g., Judge0), but it won’t execute them by default.
+                    </div>
+
+                    <div class="sandbox">
+                        <div class="sandbox-title">JS Sandbox</div>
+                        <iframe id="sandboxFrame" class="sandbox-frame" sandbox="allow-scripts"></iframe>
+                    </div>
+                </div>
+
+                <!-- FLOW MODE -->
+                <div id="flowPane" class="pane hidden">
+                    <div class="pane-head">
+                        <div class="pane-title">Flowchart Builder</div>
+                        <div class="pane-actions">
+                            <button id="exportFlowJsonBtn" class="btn small" type="button">Export JSON</button>
+                            <button id="importFlowJsonBtn" class="btn small" type="button">Import JSON</button>
+                        </div>
+                    </div>
+
+                    <div class="flow-wrap">
+                        <div class="flow-canvas">
+                            <svg id="flowLinks" class="flow-links" viewBox="0 0 100 100"
+                                preserveAspectRatio="none"></svg>
+                            <div id="flowList" class="flow-list" aria-label="Flowchart blocks list"></div>
+                        </div>
+
+                        <div class="flow-help">
+                            <div class="flow-help-title">How it works</div>
+                            <ul class="flow-help-list">
+                                <li>Add blocks from the sidebar</li>
+                                <li>Drag blocks to reorder</li>
+                                <li>Edit fields inside each block</li>
+                                <li>Generate code into the code editor</li>
+                            </ul>
+                            <div class="flow-help-warn">
+                                One-way conversion: Flow → Code. (Parsing Code → Flow is intentionally not automatic.)
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Modal -->
+        <div id="modalBackdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+            <div class="modal">
+                <div class="modal-head">
+                    <div id="modalTitle" class="modal-title">Modal</div>
+                    <button id="modalClose" class="btn ghost small" type="button">Close</button>
+                </div>
+                <div id="modalBody" class="modal-body"></div>
+                <div id="modalFoot" class="modal-foot"></div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>
